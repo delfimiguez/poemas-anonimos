@@ -12,7 +12,7 @@ export default function App() {
   const [palabraArrastrada, setPalabraArrastrada] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [cargando, setCargando] = useState(true);
-  const [usandoLocalStorage, setUsandoLocalStorage] = useState(false);
+  const [usandoLocalStorage, setUsandoLocalStorage] = useState(API_URL === null);
   const containerRef = useRef(null);
   const intervaloRef = useRef(null);
 
@@ -53,7 +53,6 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         setPalabras(data);
-        localStorage.setItem('palabrasImanes', JSON.stringify(data));
         setUsandoLocalStorage(false); // API funcionando correctamente
       } else {
         throw new Error('API no disponible');
@@ -77,8 +76,25 @@ export default function App() {
   const agregarPalabra = async () => {
     if (nuevaPalabra.trim() === '') return;
     
-    const randomX = Math.random() * (window.innerWidth - 200) + 50;
-    const randomY = Math.random() * (window.innerHeight - 400) + 200;
+    // Posición aleatoria que evita el centro de la pantalla
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    
+    let randomX, randomY;
+    
+    // Generar posición que NO esté en el centro (donde está la caja)
+    const estaEnCentro = (x, y) => {
+      const boxWidth = window.innerWidth < 640 ? window.innerWidth - 32 : 600;
+      const boxHeight = 300;
+      return Math.abs(x - centerX) < (boxWidth/2 + 50) && Math.abs(y - centerY) < (boxHeight/2 + 50);
+    };
+    
+    let intentos = 0;
+    do {
+      randomX = Math.random() * (window.innerWidth - 200) + 50;
+      randomY = Math.random() * (window.innerHeight - 200) + 50;
+      intentos++;
+    } while (estaEnCentro(randomX, randomY) && intentos < 10);
 
     const palabra = {
       id: Date.now() + Math.random(),
@@ -108,7 +124,6 @@ export default function App() {
       if (response.ok) {
         setNuevaPalabra('');
         await cargarPalabras();
-        // No cambiar usandoLocalStorage aquí - cargarPalabras lo maneja
       } else {
         throw new Error('API error');
       }
@@ -272,7 +287,7 @@ export default function App() {
   };
 
   const handleTouchEnd = async () => {
-    await handleMouseUp(); // Reutilizar la misma lógica
+    await handleMouseUp();
   };
 
   const handleKeyPress = (e) => {
@@ -379,9 +394,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Caja centrada en el medio */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl px-4">
-        <div className="border-2 border-black p-4 sm:p-8 bg-white">
+      {/* Caja centrada en el medio - z-index alto para estar por encima */}
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] w-full max-w-2xl px-4 pointer-events-none">
+        <div className="border-2 border-black p-4 sm:p-8 bg-white pointer-events-auto">
           <div className="text-center mb-4 sm:mb-6">
             <h1 className="text-2xl sm:text-4xl font-bold text-black mb-2">
               Poemas Imanes
@@ -431,7 +446,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Palabras arrastrables */}
+      {/* Palabras arrastrables - z-index más bajo que la caja */}
       {palabras.map((palabra) => (
         <div
           key={palabra.id}
@@ -439,8 +454,8 @@ export default function App() {
           style={{
             left: `${palabra.x}px`,
             top: `${palabra.y}px`,
-            zIndex: palabraArrastrada?.id === palabra.id ? 1000 : 10,
-            touchAction: 'none', // Importante para touch devices
+            zIndex: palabraArrastrada?.id === palabra.id ? 50 : 10,
+            touchAction: 'none',
           }}
           onMouseDown={(e) => handleMouseDown(e, palabra)}
           onTouchStart={(e) => handleTouchStart(e, palabra)}
