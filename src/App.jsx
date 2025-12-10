@@ -54,6 +54,7 @@ export default function App() {
         const data = await response.json();
         setPalabras(data);
         localStorage.setItem('palabrasImanes', JSON.stringify(data));
+        setUsandoLocalStorage(false); // API funcionando correctamente
       } else {
         throw new Error('API no disponible');
       }
@@ -107,6 +108,7 @@ export default function App() {
       if (response.ok) {
         setNuevaPalabra('');
         await cargarPalabras();
+        // No cambiar usandoLocalStorage aquí - cargarPalabras lo maneja
       } else {
         throw new Error('API error');
       }
@@ -186,6 +188,17 @@ export default function App() {
     setPalabraArrastrada(palabra);
   };
 
+  const handleTouchStart = (e, palabra) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    setOffset({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    });
+    setPalabraArrastrada(palabra);
+  };
+
   const handleMouseMove = (e) => {
     if (!palabraArrastrada) return;
     
@@ -193,8 +206,31 @@ export default function App() {
     let newY = e.clientY - offset.y;
 
     // Limitar a los bordes de la ventana
-    newX = Math.max(0, Math.min(newX, window.innerWidth - 200));
-    newY = Math.max(0, Math.min(newY, window.innerHeight - 100));
+    newX = Math.max(0, Math.min(newX, window.innerWidth - 150));
+    newY = Math.max(0, Math.min(newY, window.innerHeight - 80));
+
+    // Actualizar el estado local inmediatamente
+    setPalabras(prevPalabras => prevPalabras.map(p => 
+      p.id === palabraArrastrada.id 
+        ? { ...p, x: newX, y: newY }
+        : p
+    ));
+
+    // Actualizar la referencia de la palabra arrastrada
+    setPalabraArrastrada(prev => ({ ...prev, x: newX, y: newY }));
+  };
+
+  const handleTouchMove = (e) => {
+    if (!palabraArrastrada) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    let newX = touch.clientX - offset.x;
+    let newY = touch.clientY - offset.y;
+
+    // Limitar a los bordes de la ventana
+    newX = Math.max(0, Math.min(newX, window.innerWidth - 150));
+    newY = Math.max(0, Math.min(newY, window.innerHeight - 80));
 
     // Actualizar el estado local inmediatamente
     setPalabras(prevPalabras => prevPalabras.map(p => 
@@ -235,6 +271,10 @@ export default function App() {
     }
   };
 
+  const handleTouchEnd = async () => {
+    await handleMouseUp(); // Reutilizar la misma lógica
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       agregarPalabra();
@@ -243,11 +283,19 @@ export default function App() {
 
   useEffect(() => {
     if (palabraArrastrada) {
+      // Mouse events
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      
+      // Touch events
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
+      
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [palabraArrastrada, offset, palabras]);
@@ -275,6 +323,9 @@ export default function App() {
           cursor: grab;
           transition: transform 0.15s ease;
           user-select: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
         }
 
         .palabra-iman:hover {
@@ -286,9 +337,35 @@ export default function App() {
           transform: scale(1.08);
         }
 
+        /* Touch devices */
+        @media (hover: none) and (pointer: coarse) {
+          .palabra-iman {
+            cursor: default;
+          }
+          .palabra-iman:active {
+            cursor: default;
+          }
+        }
+
         ::selection {
           background-color: #FFF59D;
           color: #000;
+        }
+
+        /* Prevent text selection on mobile when dragging */
+        body {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+        }
+
+        input, button {
+          -webkit-user-select: text;
+          -moz-user-select: text;
+          -ms-user-select: text;
+          user-select: text;
         }
       `}</style>
 
@@ -303,13 +380,13 @@ export default function App() {
       )}
 
       {/* Caja centrada en el medio */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
-        <div className="border-2 border-black p-8 bg-white">
-          <div className="text-center mb-6">
-            <h1 className="text-4xl font-bold text-black mb-2">
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl px-4">
+        <div className="border-2 border-black p-4 sm:p-8 bg-white">
+          <div className="text-center mb-4 sm:mb-6">
+            <h1 className="text-2xl sm:text-4xl font-bold text-black mb-2">
               Poemas Imanes
             </h1>
-            <p className="text-base text-gray-600 mb-2">
+            <p className="text-sm sm:text-base text-gray-600 mb-2">
               Arrastrá las palabras para crear tu poema
             </p>
             {usandoLocalStorage && (
@@ -319,34 +396,36 @@ export default function App() {
             )}
 
             {/* Input para agregar palabras */}
-            <div className="flex gap-3 items-center justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-center">
               <input
                 type="text"
                 value={nuevaPalabra}
                 onChange={(e) => setNuevaPalabra(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Escribí una palabra..."
-                className="bg-white text-black px-4 py-2 border-2 border-black text-base font-medium focus:outline-none w-64"
+                className="bg-white text-black px-4 py-2 border-2 border-black text-base font-medium focus:outline-none w-full sm:w-64"
                 autoFocus
               />
-              <button
-                onClick={agregarPalabra}
-                disabled={nuevaPalabra.trim() === ''}
-                className="bg-black hover:bg-gray-800 text-white px-5 py-2 font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Plus size={18} />
-                Agregar
-              </button>
-              
-              {palabras.length > 0 && (
+              <div className="flex gap-2">
                 <button
-                  onClick={limpiarTodo}
-                  className="bg-white hover:bg-gray-100 text-black border-2 border-black p-2 transition-colors"
-                  title="Limpiar todo"
+                  onClick={agregarPalabra}
+                  disabled={nuevaPalabra.trim() === ''}
+                  className="flex-1 sm:flex-none bg-black hover:bg-gray-800 text-white px-5 py-2 font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <RotateCcw size={18} />
+                  <Plus size={18} />
+                  Agregar
                 </button>
-              )}
+                
+                {palabras.length > 0 && (
+                  <button
+                    onClick={limpiarTodo}
+                    className="bg-white hover:bg-gray-100 text-black border-2 border-black p-2 transition-colors"
+                    title="Limpiar todo"
+                  >
+                    <RotateCcw size={18} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -356,16 +435,18 @@ export default function App() {
       {palabras.map((palabra) => (
         <div
           key={palabra.id}
-          className="palabra-iman fixed bg-white border-2 border-black px-4 py-2"
+          className="palabra-iman fixed bg-white border-2 border-black px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base"
           style={{
             left: `${palabra.x}px`,
             top: `${palabra.y}px`,
             zIndex: palabraArrastrada?.id === palabra.id ? 1000 : 10,
+            touchAction: 'none', // Importante para touch devices
           }}
           onMouseDown={(e) => handleMouseDown(e, palabra)}
+          onTouchStart={(e) => handleTouchStart(e, palabra)}
         >
           <div className="flex items-center gap-2">
-            <span className="text-black text-base font-semibold select-none">
+            <span className="text-black font-semibold select-none">
               {palabra.texto}
             </span>
             <button
@@ -373,7 +454,7 @@ export default function App() {
                 e.stopPropagation();
                 eliminarPalabra(palabra.id);
               }}
-              className="text-gray-500 hover:text-black transition-colors"
+              className="text-gray-500 hover:text-black transition-colors p-1"
               title="Eliminar palabra"
             >
               ✕
