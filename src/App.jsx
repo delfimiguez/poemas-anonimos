@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, RotateCcw } from 'lucide-react';
 
 // Detectar si estamos en desarrollo o producción
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5173/api' 
+const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? null  // No usar API en localhost
   : '/api';
 
 export default function App() {
@@ -12,6 +12,7 @@ export default function App() {
   const [palabraArrastrada, setPalabraArrastrada] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [cargando, setCargando] = useState(true);
+  const [usandoLocalStorage, setUsandoLocalStorage] = useState(false);
   const containerRef = useRef(null);
   const intervaloRef = useRef(null);
 
@@ -19,8 +20,10 @@ export default function App() {
   useEffect(() => {
     cargarPalabras();
     
-    // Actualizar cada 3 segundos para ver cambios de otros usuarios
-    intervaloRef.current = setInterval(cargarPalabras, 3000);
+    // Solo hacer polling si hay API disponible
+    if (API_URL) {
+      intervaloRef.current = setInterval(cargarPalabras, 3000);
+    }
     
     return () => {
       if (intervaloRef.current) {
@@ -30,14 +33,41 @@ export default function App() {
   }, []);
 
   const cargarPalabras = async () => {
+    // Si no hay API (desarrollo local), usar localStorage
+    if (!API_URL) {
+      const local = localStorage.getItem('palabrasImanes');
+      if (local) {
+        try {
+          setPalabras(JSON.parse(local));
+        } catch (e) {
+          setPalabras([]);
+        }
+      }
+      setUsandoLocalStorage(true);
+      setCargando(false);
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/palabras`);
       if (response.ok) {
         const data = await response.json();
         setPalabras(data);
+        localStorage.setItem('palabrasImanes', JSON.stringify(data));
+      } else {
+        throw new Error('API no disponible');
       }
     } catch (error) {
-      console.error('Error cargando palabras:', error);
+      console.log('Usando localStorage (API no disponible)');
+      setUsandoLocalStorage(true);
+      const local = localStorage.getItem('palabrasImanes');
+      if (local) {
+        try {
+          setPalabras(JSON.parse(local));
+        } catch (e) {
+          setPalabras([]);
+        }
+      }
     } finally {
       setCargando(false);
     }
@@ -46,7 +76,6 @@ export default function App() {
   const agregarPalabra = async () => {
     if (nuevaPalabra.trim() === '') return;
     
-    // Posición aleatoria inicial
     const randomX = Math.random() * (window.innerWidth - 200) + 50;
     const randomY = Math.random() * (window.innerHeight - 400) + 200;
 
@@ -59,6 +88,15 @@ export default function App() {
       fecha: new Date().toISOString()
     };
 
+    // Si estamos usando localStorage, agregar directamente
+    if (!API_URL || usandoLocalStorage) {
+      const nuevasPalabras = [...palabras, palabra];
+      setPalabras(nuevasPalabras);
+      localStorage.setItem('palabrasImanes', JSON.stringify(nuevasPalabras));
+      setNuevaPalabra('');
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/palabras`, {
         method: 'POST',
@@ -68,14 +106,29 @@ export default function App() {
 
       if (response.ok) {
         setNuevaPalabra('');
-        await cargarPalabras(); // Recargar para mostrar la nueva palabra
+        await cargarPalabras();
+      } else {
+        throw new Error('API error');
       }
     } catch (error) {
-      console.error('Error agregando palabra:', error);
+      console.log('Guardando localmente...');
+      const nuevasPalabras = [...palabras, palabra];
+      setPalabras(nuevasPalabras);
+      localStorage.setItem('palabrasImanes', JSON.stringify(nuevasPalabras));
+      setNuevaPalabra('');
+      setUsandoLocalStorage(true);
     }
   };
 
   const eliminarPalabra = async (id) => {
+    // Si estamos usando localStorage, eliminar directamente
+    if (!API_URL || usandoLocalStorage) {
+      const nuevasPalabras = palabras.filter(p => p.id !== id);
+      setPalabras(nuevasPalabras);
+      localStorage.setItem('palabrasImanes', JSON.stringify(nuevasPalabras));
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/palabras`, {
         method: 'DELETE',
@@ -85,16 +138,28 @@ export default function App() {
 
       if (response.ok) {
         await cargarPalabras();
+      } else {
+        throw new Error('API error');
       }
     } catch (error) {
-      console.error('Error eliminando palabra:', error);
+      console.log('Eliminando localmente...');
+      const nuevasPalabras = palabras.filter(p => p.id !== id);
+      setPalabras(nuevasPalabras);
+      localStorage.setItem('palabrasImanes', JSON.stringify(nuevasPalabras));
+      setUsandoLocalStorage(true);
     }
   };
 
   const limpiarTodo = async () => {
-    if (window.confirm('¿Seguro que querés borrar todas las palabras? Esto afectará a todos los usuarios.')) {
+    if (window.confirm('¿Seguro que querés borrar todas las palabras?')) {
+      // Si estamos usando localStorage, limpiar directamente
+      if (!API_URL || usandoLocalStorage) {
+        setPalabras([]);
+        localStorage.removeItem('palabrasImanes');
+        return;
+      }
+
       try {
-        // Eliminar todas las palabras una por una
         for (const palabra of palabras) {
           await fetch(`${API_URL}/palabras`, {
             method: 'DELETE',
@@ -104,7 +169,10 @@ export default function App() {
         }
         await cargarPalabras();
       } catch (error) {
-        console.error('Error limpiando todo:', error);
+        console.log('Limpiando localmente...');
+        setPalabras([]);
+        localStorage.removeItem('palabrasImanes');
+        setUsandoLocalStorage(true);
       }
     }
   };
@@ -128,15 +196,26 @@ export default function App() {
     newX = Math.max(0, Math.min(newX, window.innerWidth - 200));
     newY = Math.max(0, Math.min(newY, window.innerHeight - 100));
 
-    setPalabras(palabras.map(p => 
+    // Actualizar el estado local inmediatamente
+    setPalabras(prevPalabras => prevPalabras.map(p => 
       p.id === palabraArrastrada.id 
         ? { ...p, x: newX, y: newY }
         : p
     ));
+
+    // Actualizar la referencia de la palabra arrastrada
+    setPalabraArrastrada(prev => ({ ...prev, x: newX, y: newY }));
   };
 
   const handleMouseUp = async () => {
     if (palabraArrastrada) {
+      // Si estamos usando localStorage, guardar directamente
+      if (!API_URL || usandoLocalStorage) {
+        localStorage.setItem('palabrasImanes', JSON.stringify(palabras));
+        setPalabraArrastrada(null);
+        return;
+      }
+
       // Actualizar posición en el servidor
       try {
         await fetch(`${API_URL}/actualizar-posicion`, {
@@ -149,7 +228,8 @@ export default function App() {
           })
         });
       } catch (error) {
-        console.error('Error actualizando posición:', error);
+        console.log('Guardando posición localmente...');
+        localStorage.setItem('palabrasImanes', JSON.stringify(palabras));
       }
       setPalabraArrastrada(null);
     }
@@ -229,9 +309,14 @@ export default function App() {
             <h1 className="text-4xl font-bold text-black mb-2">
               Poemas Imanes
             </h1>
-            <p className="text-base text-gray-600 mb-6">
+            <p className="text-base text-gray-600 mb-2">
               Arrastrá las palabras para crear tu poema
             </p>
+            {usandoLocalStorage && (
+              <p className="text-xs text-orange-600 mb-4">
+                💾 Modo local - Los cambios solo se ven en este dispositivo
+              </p>
+            )}
 
             {/* Input para agregar palabras */}
             <div className="flex gap-3 items-center justify-center">
