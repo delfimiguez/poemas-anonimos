@@ -1,0 +1,75 @@
+# 🚀 INSTRUCCIONES RÁPIDAS
+
+## 📦 Descargaste: poemas-imanes.zip
+
+## ⚡ Deploy en 5 pasos:
+
+### 1. Descomprimir
+Descomprimí el archivo `poemas-imanes.zip`
+
+### 2. Subir a GitHub
+```bash
+cd poemas-imanes
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/poemas-imanes.git
+git push -u origin main
+```
+
+### 3. Crear Vercel KV Database
+1. Ve a [vercel.com/storage](https://vercel.com/storage)
+2. Click en "Create Database"
+3. Selecciona "KV"
+4. Dale un nombre: `poemas-imanes-kv`
+5. Click "Create"
+
+### 4. Deploy en Vercel
+1. Ve a [vercel.com/new](https://vercel.com/new)
+2. Importa tu repo de GitHub
+3. Framework: Vite (autodetectado)
+4. Click "Deploy"
+
+### 5. Conectar Database
+1. En tu proyecto deployado, ve a "Storage" tab
+2. Click "Connect Store"
+3. Selecciona tu KV database
+4. Click "Connect"
+5. Ve a "Deployments" → Redeploy
+
+## ✅ ¡LISTO!
+
+Tu app está online en: `https://tu-proyecto.vercel.app`
+
+---
+
+## 📖 Documentación completa
+
+Lee `README_DEPLOY.md` para:
+- Desarrollo local
+- Solución de problemas
+- Detalles técnicos
+- Variables de entorno
+
+---
+
+## 🎯 ¿Qué hace esta app?
+
+- **Canvas colaborativo**: Todos los usuarios ven las mismas palabras
+- **Drag & drop**: Arrastrá palabras para formar poemas
+- **Tiempo real**: Se actualiza cada 3 segundos
+- **Anónimo**: No se pide ningún dato personal
+
+---
+
+## 💡 Tips
+
+- Los poemas se comparten entre TODOS los usuarios
+- Cualquiera puede mover cualquier palabra
+- Se actualiza automáticamente cada 3 segundos
+- Gratis hasta 256MB de datos (miles de palabras)
+
+---
+
+**¿Problemas?** Lee el `README_DEPLOY.md` completo 📚
